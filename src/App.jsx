@@ -2,7 +2,7 @@ import { createBrowserRouter, Outlet, RouterProvider, useLoaderData, useSubmit }
 import MainNavigation from './components/MainNavigation.jsx';
 import HomePage from './pages/HomePage.jsx';
 import AuthenticationPage, { action as authenticationAction } from './pages/AuthenticationPage.jsx';
-import ProtectedPage, { action as protectedAction } from './pages/ProtectedPage.jsx';
+import ProtectedPage, { action as protectedAction, loader as protectedLoader } from './pages/ProtectedPage.jsx';
 import { action as logoutAction } from './pages/Logout.jsx';
 import { checkAuthLoader, getTokenDuration, tokenLoader } from './utils/auth-utils.js';
 import { useEffect } from 'react';
@@ -54,7 +54,12 @@ const router = createBrowserRouter([
       {
         path: 'protected',
         element: <ProtectedPage/>,
-        loader: checkAuthLoader, // check if token exists and rediret if no
+        // loader: checkAuthLoader, // check if token exists and rediret if no
+        loader: async () => { // loader can do multiple things if written as an async function
+          const redirectResult = checkAuthLoader();
+          if (redirectResult) return redirectResult;
+          return protectedLoader();
+        },
         action: protectedAction
       },
       {

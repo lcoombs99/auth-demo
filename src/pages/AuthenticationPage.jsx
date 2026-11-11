@@ -1,12 +1,17 @@
 import { Form, Link, redirect, useActionData, useSearchParams, useNavigation } from 'react-router-dom';
 import { useState } from 'react';
 
+const API_KEY = 'AIzaSyAf9siTNy1fubRkCUly8uwiyPVZzDybbYI';
 const AuthenticationPage = () => {
   const data = useActionData();
   const isSubmitting = navigation.state === 'submitting';
   const [searchParams] = useSearchParams();
   const isLogin = searchParams.get('mode') !== 'signup';
   // from url: ?mode=signup
+
+  // https://title-auth-db-fb4b0-default-rtdb.firebaseio.com/
+  // api key: AIzaSyAf9siTNy1fubRkCUly8uwiyPVZzDybbYI
+
   const [password, setPassword] = useState('');
 
   return (
@@ -20,7 +25,8 @@ const AuthenticationPage = () => {
           ))}
         </ul>
       )}
-      {data?.message && <p className="alert-error">{data.message}</p>}
+      {/*{data?.message && <p className="alert-error">{data.message}</p>} from local server*/}
+      {data?.error?.message && <p className="alert-error">{data.error.message}</p>}
 
       <Form method="POST">
         <div className="form-control">
@@ -29,7 +35,7 @@ const AuthenticationPage = () => {
         </div>
         <div className="form-control">
           <label htmlFor="password">Password</label>
-          <input id="password" type="password" name="password" required onChange={(e) => setPassword(e.target.value)} />
+          <input id="password" type="password" name="password" required onChange={(e) => setPassword(e.target.value)}/>
           {!isLogin && <p>Password must be at least 6 characters. Current length: {password.length}</p>}
         </div>
         <div className="form-action">
@@ -53,18 +59,21 @@ export default AuthenticationPage;
 
 export async function action({ request }) {
   const searchParams = new URL(request.url).searchParams;
-  const mode = searchParams.get('mode') === 'signup' ? 'signup' : 'login';
+  // const mode = searchParams.get('mode') === 'signup' ? 'signup' : 'login'; // from local server
+  const mode = searchParams.get('mode') === 'signup' ? 'signUp' : 'signInWithPassword';
 
   // comes in because we are using react router's form
   const data = await request.formData();
   // retrieve the data from form
   const authData = {
     email: data.get('email'),
-    password: data.get('password')
+    password: data.get('password'),
+    returnSecureToken: true // added for firebase
   };
 
   // send that data to the backend
-  const response = await fetch(`http://localhost:8080/${mode}`, {
+  // const response = await fetch(`http://localhost:8080/${mode}`, {
+  const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:${mode}?key=${API_KEY}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -72,7 +81,7 @@ export async function action({ request }) {
     body: JSON.stringify(authData)
   });
 
-  if (response.status === 401 || response.status === 422) {
+  if (response.status === 401 || response.status === 400 || response.status === 422 || response.status === 500) {
     return response;
   }
 
@@ -84,12 +93,16 @@ export async function action({ request }) {
   }
 
   const responseData = await response.json();
-  const token = responseData.token;
+  // const token = responseData.token;
+  const token = responseData.idToken;
   localStorage.setItem('token', token);
 
   const expiration = new Date();
+  // expiration.setHours(expiration.getHours() + 1);
   // expiration.setSeconds(expiration.getSeconds() + 15);
-  expiration.setHours(expiration.getHours() + 1);
+
+  const expiresInSeconds = parseInt(responseData.expiresIn, 10) || 3600; // default to 3600 or an hour
+  expiration.setSeconds(expiration.getSeconds() + expiresInSeconds);
 
   localStorage.setItem('expiration', expiration.toISOString());
 
